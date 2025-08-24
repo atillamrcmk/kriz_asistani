@@ -47,7 +47,7 @@ class _SettingsPageState extends State<SettingsPage> {
               setState(() => _autoNightMode = v);
               _snack(
                 v
-                    ? 'Gece modu otomatik açılacak.'
+                    ? 'Gece modu otomatik açılacak..'
                     : 'Gece modu otomatik kapalı.',
               );
             },
