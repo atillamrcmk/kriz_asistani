@@ -1,81 +1,85 @@
+// lib/features/journal/journal_page.dart
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_application_7/widgets/home_action.dart';
+
+import 'journal_controller.dart';
+import 'journal_view.dart'; // JournalItemVM burada
 
 class JournalPage extends StatefulWidget {
   const JournalPage({super.key});
+
   @override
   State<JournalPage> createState() => _JournalPageState();
 }
 
 class _JournalPageState extends State<JournalPage> {
-  final _ctrl = TextEditingController();
-  List<String> _list = [];
-
-  Future<void> _load() async {
-    final sp = await SharedPreferences.getInstance();
-    setState(() => _list = sp.getStringList('journal') ?? []);
-  }
-
-  Future<void> _save() async {
-    if (_ctrl.text.trim().isEmpty) return;
-    final sp = await SharedPreferences.getInstance();
-    _list.insert(0, '${DateTime.now().toIso8601String()}|${_ctrl.text.trim()}');
-    await sp.setStringList('journal', _list);
-    _ctrl.clear();
-    setState(() {});
-  }
+  late final JournalController c;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    c = JournalController()..load();
+
+    // Arama kutusu değişince listeyi yenile
+    c.searchCtrl.addListener(() {
+      // items getter'ı searchCtrl'e bakıyor; UI'yı tetikle
+      c.notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    c.inputCtrl.dispose();
+    c.searchCtrl.dispose();
+    c.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Günlük')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: _ctrl,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'Bugün ne oldu?',
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                FilledButton(onPressed: _save, child: const Text('Kaydet')),
-                const SizedBox(width: 8),
-                OutlinedButton(onPressed: _load, child: const Text('Yenile')),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _list.isEmpty
-                  ? const Center(child: Text('Kayıt yok.'))
-                  : ListView.separated(
-                      itemCount: _list.length,
-                      separatorBuilder: (_, __) => const Divider(),
-                      itemBuilder: (_, i) {
-                        final p = _list[i].split('|');
-                        final dt = DateTime.tryParse(p.first) ?? DateTime.now();
-                        final text = p.length > 1 ? p[1] : '';
-                        return ListTile(
-                          title: Text(text),
-                          subtitle: Text(dt.toLocal().toString()),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
+      appBar: AppBar(
+        title: const Text('Günlük'),
+        actions: const [HomeAction()],
+      ),
+      body: AnimatedBuilder(
+        animation: c,
+        builder: (_, __) {
+          // Controller modelini, view’ın beklediği VM tipine çevir
+          final List<JournalItemVM> vmItems = c.items
+              .map(
+                (e) => JournalItemVM(
+                  text: e.text,
+                  dt: e.createdAt,
+                  mood: e.moodTag ?? '-',
+                  score: e.score,
+                  level: e.level, // 'Düşük' | 'Orta' | 'Yüksek'
+                ),
+              )
+              .toList();
+
+          return JournalView(
+            searchCtrl: c.searchCtrl,
+            entryCtrl: c.inputCtrl,
+            items: vmItems,
+
+            // mood seçimi
+            onSelectMood: (mood) {
+              c.selectedMood = mood;
+              c.notifyListeners();
+            },
+
+            // giriş alanlarını temizle (kayıtları silmeden)
+            onClear: () {
+              c.inputCtrl.clear();
+              c.selectedMood = null;
+              c.notifyListeners();
+            },
+
+            // kaydet
+            onSave: c.addEntry,
+          );
+        },
       ),
     );
   }

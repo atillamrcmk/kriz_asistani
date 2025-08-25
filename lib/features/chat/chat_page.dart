@@ -1,8 +1,6 @@
 // lib/features/chat/chat_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:flutter_tts/flutter_tts.dart';
 
 import 'chat_controller.dart';
 import 'chat_message.dart';
@@ -17,44 +15,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   final _tc = TextEditingController();
   final _listCtrl = ScrollController();
 
-  // --- SES ---
-  late final stt.SpeechToText _stt;
-  bool _sttAvailable = false;
-  bool _isListening = false;
-
-  late final FlutterTts _tts;
-
-  @override
-  void initState() {
-    super.initState();
-    _initSTT();
-    _initTTS();
-  }
-
-  Future<void> _initSTT() async {
-    _stt = stt.SpeechToText();
-    _sttAvailable = await _stt.initialize(
-      onStatus: (s) => setState(() => _isListening = s == 'listening'),
-      onError: (e) => debugPrint("STT error: $e"),
-    );
-    setState(() {});
-  }
-
-  Future<void> _initTTS() async {
-    _tts = FlutterTts();
-    // Türkçe için:
-    await _tts.setLanguage('tr-TR'); // gerekirse 'tr_TR'
-    await _tts.setPitch(1.0);
-    await _tts.setSpeechRate(0.45); // okunabilir hız
-    await _tts.setVolume(1.0);
-  }
-
   @override
   void dispose() {
     _tc.dispose();
     _listCtrl.dispose();
-    _stt.stop();
-    _tts.stop();
     super.dispose();
   }
 
@@ -69,58 +33,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
-  // --- TTS ---
-  Future<void> _speak(String text) async {
-    if (text.trim().isEmpty) return;
-    try {
-      await _tts.stop(); // çakışma olmasın
-      await _tts.speak(text);
-    } catch (_) {}
-  }
-
-  // --- STT ---
-  Future<void> _toggleListen() async {
-    if (!_sttAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Cihazda konuşma tanıma kullanılamıyor.")),
-      );
-      return;
-    }
-
-    if (_isListening) {
-      await _stt.stop();
-      setState(() => _isListening = false);
-      return;
-    }
-
-    final ok = await _stt.listen(
-      localeId: 'tr_TR', // cihaz diline göre 'tr-TR' de olabilir
-      partialResults: true,
-      onResult: (res) {
-        // geçici sonuçları da input alanına yaz
-        if (res.recognizedWords.isNotEmpty) {
-          setState(() => _tc.text = res.recognizedWords);
-          _tc.selection = TextSelection.fromPosition(
-            TextPosition(offset: _tc.text.length),
-          );
-        }
-        if (res.finalResult) {
-          setState(() => _isListening = false);
-        }
-      },
-    );
-    if (ok) setState(() => _isListening = true);
-  }
-
   Future<void> _handleSend() async {
     final txt = _tc.text.trim();
     if (txt.isEmpty) return;
     _tc.clear();
     final res = await ref.read(chatControllerProvider).send(txt);
     await _scrollToEnd();
-
-    // Asistan yanıtını seslendir
-    _speak(res.reply);
 
     if (res.action == "emergency" && mounted) {
       final cs = Theme.of(context).colorScheme;
@@ -142,7 +60,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
-  // renkler (senin önceki sürüm)
+  // Balon renkleri (sentiment'e göre)
   (Color bg, Color fg) _bubbleColors(BuildContext context, ChatMessage m) {
     final cs = Theme.of(context).colorScheme;
     if (m.isUser) return (cs.primaryContainer, cs.onPrimaryContainer);
@@ -175,29 +93,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Kriz Sohbet Asistanı"),
-        actions: [
-          IconButton(
-            tooltip: _isListening ? "Dinlemeyi durdur" : "Konuşarak yaz",
-            icon: Icon(_isListening ? Icons.mic : Icons.mic_none),
-            onPressed: _toggleListen,
-          ),
-          IconButton(
-            tooltip: "Son cevabı seslendir",
-            icon: const Icon(Icons.volume_up),
-            onPressed: () {
-              // son asistan mesajını oku
-              final last = controller.messages.lastWhere(
-                (m) => m.role == ChatRole.assistant,
-                orElse: () =>
-                    ChatMessage(role: ChatRole.assistant, content: ""),
-              );
-              _speak(last.content);
-            },
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text("Kriz Sohbet Asistanı")),
       body: Column(
         children: [
           Expanded(
@@ -265,9 +161,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _handleSend(),
                       decoration: InputDecoration(
-                        hintText: _isListening
-                            ? "Dinleniyor..."
-                            : "Bir şeyler yaz...",
+                        hintText: "Bir şeyler yaz...",
                         filled: true,
                         fillColor: cs.surfaceVariant.withOpacity(0.60),
                         contentPadding: const EdgeInsets.all(12),

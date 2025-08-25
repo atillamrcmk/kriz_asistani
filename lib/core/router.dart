@@ -1,5 +1,5 @@
 import 'package:flutter_application_7/features/chat/chat_page.dart';
-import 'package:flutter_application_7/features/exercises/exercises_page.dart';
+import 'package:flutter_application_7/features/exercises/exercise_page.dart';
 import 'package:flutter_application_7/features/settings/settings_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
