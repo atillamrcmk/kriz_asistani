@@ -6,9 +6,9 @@ import 'home_controller.dart';
 class HomeView extends StatelessWidget {
   final HomeController c;
   final void Function(String path) onNavigate;
-  final VoidCallback onNewJournal; // (kullanmıyorsan silebilirsin)
-  final VoidCallback onGoPanic; // (kullanmıyorsan silebilirsin)
-  final VoidCallback onGoTriage; // (kullanmıyorsan silebilirsin)
+  final VoidCallback onNewJournal;
+  final VoidCallback onGoPanic;
+  final VoidCallback onGoTriage;
 
   const HomeView({
     super.key,
@@ -22,127 +22,82 @@ class HomeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final now = DateTime.now();
-    final greeting = c.greetingForHour(now.hour);
-
-    final favoriteItems = c.items
-        .where((e) => c.favorites.contains(e.title))
-        .toList();
 
     return Stack(
       children: [
-        // ---- Background ----
+        // ---- Gradient Arka Plan ----
         Positioned.fill(
           child: DecoratedBox(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF14161C), Color(0xFF0D0F14)],
+                colors: [
+                  Color(0xFF0F1F26), // lacivert-yeşil
+                  Color(0xFF1B1030), // mor
+                ],
               ),
             ),
           ),
         ),
-        const _Blob(top: -70, right: -40, color: Color(0x386EA8FE), size: 220),
+        // yumuşak “blob” ışık lekeleri
+        const _Blob(top: -80, left: -40, color: Color(0x3346D8FF), size: 280),
         const _Blob(
           bottom: -60,
-          left: -30,
-          color: Color(0x2BFF7A9E),
-          size: 180,
+          right: -30,
+          color: Color(0x33A6FF9E),
+          size: 220,
         ),
 
-        // ---- Content ----
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ---- Başlık ----
                 Text(
                   'Kriz Asistanı',
-                  style: theme.textTheme.headlineMedium?.copyWith(
+                  style: theme.textTheme.headlineLarge?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                     letterSpacing: .2,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Text(
-                  '$greeting • ${c.ddMMyyyy(now)}',
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  'Hoş geldin 👋',
+                  style: theme.textTheme.titleMedium?.copyWith(
                     color: Colors.white70,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 16),
 
-                // ---- Quick chips (dinamik) ----
-                SizedBox(
-                  height: 36,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      _StatChip(
-                        'Ruh Hali',
-                        c.moodLabel,
-                        c.moodIcon,
-                        color: c.moodColor(theme.colorScheme),
-                      ),
-                      const SizedBox(width: 10),
-                      _StatChip(
-                        'Egzersiz',
-                        c.quickExerciseLabel,
-                        Icons.accessibility_new,
-                      ),
-                      const SizedBox(width: 10),
-                      _StatChip('Günlük', c.quickJournalLabel, Icons.note_alt),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
 
-                if (favoriteItems.isNotEmpty) ...[
-                  Text(
-                    'Favoriler',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    height: 96,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: favoriteItems.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
-                      itemBuilder: (_, i) => _FavoritePill(
-                        icon: favoriteItems[i].icon,
-                        title: favoriteItems[i].title,
-                        onTap: () => onNavigate(favoriteItems[i].path),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-
-                // ---- Menü kartları ----
+                // ---- 2x3 Grid Menü (Cam efektli) ----
                 Expanded(
-                  child: ListView.separated(
+                  child: GridView.builder(
                     physics: const BouncingScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 14,
+                          mainAxisSpacing: 14,
+                          childAspectRatio: .95,
+                        ),
                     itemCount: c.items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 14),
                     itemBuilder: (ctx, i) {
                       final item = c.items[i];
                       final accent = c.accentForIndex(i);
-                      final isFav = c.favorites.contains(item.title);
-                      return _GlassMenuCard(
-                        title: item.title,
+                      return _GlassTile(
                         icon: item.icon,
+                        title: item.title,
                         accent: accent,
-                        isFavorite: isFav,
                         onTap: () => onNavigate(item.path),
-                        onLongPress: () => c.toggleFavorite(item.title),
+                        // hafif giriş animasyonu
                         delayMs: 40 * i,
                       );
                     },
@@ -157,31 +112,27 @@ class HomeView extends StatelessWidget {
   }
 }
 
-// ---------- UI parçaları ----------
-
-class _GlassMenuCard extends StatefulWidget {
-  final String title;
+// --------- Cam (glassmorphism) kutu ----------
+class _GlassTile extends StatefulWidget {
   final IconData icon;
+  final String title;
   final Color accent;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
-  final bool isFavorite;
   final int delayMs;
-  const _GlassMenuCard({
-    required this.title,
+
+  const _GlassTile({
     required this.icon,
+    required this.title,
     required this.accent,
     required this.onTap,
-    required this.onLongPress,
-    required this.isFavorite,
     this.delayMs = 0,
   });
 
   @override
-  State<_GlassMenuCard> createState() => _GlassMenuCardState();
+  State<_GlassTile> createState() => _GlassTileState();
 }
 
-class _GlassMenuCardState extends State<_GlassMenuCard>
+class _GlassTileState extends State<_GlassTile>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c;
   late final Animation<double> _fade;
@@ -192,11 +143,11 @@ class _GlassMenuCardState extends State<_GlassMenuCard>
     super.initState();
     _c = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 380),
+      duration: const Duration(milliseconds: 400),
     );
     _fade = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
     _slide = Tween<Offset>(
-      begin: const Offset(0, .06),
+      begin: const Offset(0, .08),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _c, curve: Curves.easeOutCubic));
     Future.delayed(Duration(milliseconds: widget.delayMs), _c.forward);
@@ -210,8 +161,8 @@ class _GlassMenuCardState extends State<_GlassMenuCard>
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = widget.accent.withOpacity(.35);
-    final shadowColor = widget.accent.withOpacity(.28);
+    final border = widget.accent.withOpacity(.35);
+    final glow = widget.accent.withOpacity(.22);
 
     return FadeTransition(
       opacity: _fade,
@@ -219,13 +170,12 @@ class _GlassMenuCardState extends State<_GlassMenuCard>
         position: _slide,
         child: GestureDetector(
           onTap: widget.onTap,
-          onLongPress: widget.onLongPress,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(24),
             child: Stack(
               children: [
+                // arka katman: cam görünümü
                 Container(
-                  height: 74,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
@@ -235,13 +185,14 @@ class _GlassMenuCardState extends State<_GlassMenuCard>
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    border: Border.all(color: borderColor, width: 1),
-                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: border, width: 1),
+                    borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: shadowColor,
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
+                        color: glow,
+                        blurRadius: 20,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 8),
                       ),
                     ],
                   ),
@@ -252,18 +203,21 @@ class _GlassMenuCardState extends State<_GlassMenuCard>
                     child: const SizedBox(),
                   ),
                 ),
-                Container(
-                  height: 74,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  alignment: Alignment.centerLeft,
-                  child: Row(
+                // içerik
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        width: 44,
-                        height: 44,
+                        width: 54,
+                        height: 54,
                         decoration: BoxDecoration(
                           color: widget.accent.withOpacity(.18),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: widget.accent.withOpacity(.45),
                             width: 1,
@@ -272,31 +226,20 @@ class _GlassMenuCardState extends State<_GlassMenuCard>
                         child: Icon(
                           widget.icon,
                           color: widget.accent,
-                          size: 24,
+                          size: 28,
                         ),
                       ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Text(
-                          widget.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      const Spacer(),
+                      Text(
+                        widget.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          height: 1.15,
+                          fontWeight: FontWeight.w700,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        widget.isFavorite
-                            ? Icons.star
-                            : Icons.arrow_forward_ios,
-                        size: widget.isFavorite ? 20 : 16,
-                        color: widget.isFavorite
-                            ? widget.accent
-                            : Colors.white70,
                       ),
                     ],
                   ),
@@ -310,86 +253,14 @@ class _GlassMenuCardState extends State<_GlassMenuCard>
   }
 }
 
-class _FavoritePill extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-  const _FavoritePill({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withOpacity(.06),
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color? color;
-  const _StatChip(this.label, this.value, this.icon, {this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withOpacity(.06),
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(
-          children: [
-            Icon(icon, color: color ?? Colors.white70, size: 16),
-            const SizedBox(width: 6),
-            Text(
-              '$label: ',
-              style: const TextStyle(
-                color: Colors.white70,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Text(value, style: TextStyle(color: color ?? Colors.white)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
+// yumuşak ışık lekesi
 class _Blob extends StatelessWidget {
   final double size;
   final Color color;
   final double? top, right, bottom, left;
   const _Blob({
     required this.color,
-    this.size = 160,
+    this.size = 180,
     this.top,
     this.right,
     this.bottom,
