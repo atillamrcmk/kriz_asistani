@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'panic_controller.dart';
 
@@ -6,32 +7,46 @@ class PanicView extends StatelessWidget {
   final PanicController c;
   final VoidCallback onRestart;
   final VoidCallback onEmergency;
+  final VoidCallback onOpenSafetyPlan;
+  final VoidCallback onOpenHopeBox;
+
   const PanicView({
     super.key,
     required this.c,
     required this.onRestart,
     required this.onEmergency,
+    required this.onOpenSafetyPlan,
+    required this.onOpenHopeBox,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final mq = MediaQuery.of(context);
+    final w = mq.size.width;
+
+    // Küçük ekranlarda yatay boşluğu azalt
+    final horizontalPadding = w < 360 ? 16.0 : 24.0;
 
     return Stack(
       children: [
-        // Arka plan: gradient + bokeh
         const _Background(),
-        // İçerik
         SafeArea(
           child: Center(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
                 child: c.isDone
-                    ? _CompletionCard(onRestart: onRestart, accent: cs.primary)
+                    ? _CompletionCard(
+                        onRestart: onRestart,
+                        onOpenSafetyPlan: onOpenSafetyPlan,
+                        onOpenHopeBox: onOpenHopeBox,
+                        accent: cs.primary,
+                      )
                     : Column(
                         mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           _BreathRing(
                             primary: cs.primary,
@@ -63,26 +78,16 @@ class PanicView extends StatelessWidget {
                           ),
                           const SizedBox(height: 12),
                           _RoundsProgress(
+                            current: c.completedRounds,
                             total: PanicController.targetRounds,
-                            done: c.completedRounds,
-                            accent: cs.primary,
                           ),
                           const SizedBox(height: 24),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _GlassButton(
-                                onTap: onRestart,
-                                icon: Icons.refresh_rounded,
-                                label: 'Yeniden Başlat',
-                              ),
-                              const SizedBox(width: 12),
-                              _GlassButton(
-                                onTap: onEmergency,
-                                icon: Icons.phone_in_talk_rounded,
-                                label: 'Acil Yardım',
-                              ),
-                            ],
+
+                          // --- Row yerine Wrap: taşma biter, otomatik alt satıra iner ---
+                          _ActionsWrap(
+                            onEmergency: onEmergency,
+                            onOpenSafetyPlan: onOpenSafetyPlan,
+                            onOpenHopeBox: onOpenHopeBox,
                           ),
                         ],
                       ),
@@ -95,79 +100,31 @@ class PanicView extends StatelessWidget {
   }
 }
 
-// ---- Background ----
 class _Background extends StatelessWidget {
   const _Background();
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF12141A), Color(0xFF0E1015)],
-              ),
-            ),
-          ),
-        ),
-        const _Blob(top: -80, right: -40, color: Color(0x2A6EA8FE), size: 240),
-        const _Blob(
-          bottom: -70,
-          left: -60,
-          color: Color(0x29FF7AAE),
-          size: 220,
-        ),
-      ],
-    );
-  }
-}
-
-class _Blob extends StatelessWidget {
-  final double? top, right, bottom, left, size;
-  final Color color;
-  const _Blob({
-    this.top,
-    this.right,
-    this.bottom,
-    this.left,
-    this.size,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      top: top,
-      right: right,
-      bottom: bottom,
-      left: left,
-      child: IgnorePointer(
-        child: Container(
-          width: size ?? 200,
-          height: size ?? 200,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [color, color.withOpacity(0)],
-              stops: const [0, 1],
-            ),
-          ),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0F1F26), Color(0xFF1B1030)],
         ),
       ),
     );
   }
 }
 
-// ---- Breath ring + painter ----
 class _BreathRing extends StatelessWidget {
-  final Color primary, secondary;
+  final Color primary;
+  final Color secondary;
   final String phaseLabel;
-  final int secsLeft, secsTotal;
-  final double targetScale, glow;
+  final int secsLeft;
+  final int secsTotal;
+  final double targetScale;
+  final double glow;
 
   const _BreathRing({
     required this.primary,
@@ -181,159 +138,85 @@ class _BreathRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const ringSize = 220.0;
+    final w = MediaQuery.of(context).size.width;
+    // Ekrana göre boyut: genişliğin %58’i, en fazla 240, en az 140
+    final base = w * 0.58;
+    final outerSize = base.clamp(140.0, 240.0);
+    final innerSize = (outerSize - 40) * targetScale;
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 1.0, end: targetScale),
-      duration: const Duration(milliseconds: 650),
-      curve: Curves.easeOutCubic,
-      builder: (_, scale, __) {
-        return Transform.scale(
-          scale: scale,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: ringSize * .98,
-                height: ringSize * .98,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: primary.withOpacity(glow),
-                      blurRadius: 40,
-                      spreadRadius: 6,
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: ringSize,
-                height: ringSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      primary.withOpacity(.85),
-                      secondary.withOpacity(.18),
-                    ],
-                    stops: const [.2, 1],
-                  ),
-                ),
-              ),
-              CustomPaint(
-                size: const Size.square(ringSize + 26),
-                painter: _RingPainter(
-                  progress: (secsTotal - secsLeft) / secsTotal,
-                  color: primary,
-                ),
-              ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 2),
-                  Text(
-                    phaseLabel,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$secsLeft',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 32,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ],
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: outerSize,
+          height: outerSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: primary.withOpacity(glow),
+                blurRadius: 0.1 * outerSize,
+                spreadRadius: 0.05 * outerSize,
               ),
             ],
           ),
-        );
-      },
+        ),
+        AnimatedContainer(
+          duration: const Duration(seconds: 1),
+          width: innerSize,
+          height: innerSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: secondary.withOpacity(0.3),
+            border: Border.all(color: primary, width: 4),
+          ),
+          child: Center(
+            child: Text(
+              phaseLabel,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 0,
+          child: Text(
+            '$secsLeft/$secsTotal',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 16,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _RingPainter extends CustomPainter {
-  final double progress; // 0..1
-  final Color color;
-  _RingPainter({required this.progress, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = size.shortestSide / 2 - 6;
-
-    final bg = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 10
-      ..color = Colors.white.withOpacity(.08)
-      ..strokeCap = StrokeCap.round;
-
-    final fg = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 10
-      ..shader = SweepGradient(
-        colors: [color, color.withOpacity(.4)],
-        stops: const [0.0, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: radius))
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawCircle(center, radius, bg);
-
-    final start = -90 * (3.1415926535 / 180);
-    final sweep = 2 * 3.1415926535 * progress.clamp(0.0, 1.0);
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      start,
-      sweep,
-      false,
-      fg,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _RingPainter old) =>
-      old.progress != progress || old.color != color;
-}
-
-// ---- Rounds & Buttons & Completion ----
 class _RoundsProgress extends StatelessWidget {
-  final int total, done;
-  final Color accent;
-  const _RoundsProgress({
-    required this.total,
-    required this.done,
-    required this.accent,
-  });
+  final int current;
+  final int total;
+
+  const _RoundsProgress({required this.current, required this.total});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(total, (i) {
-        final active = i < done;
+      children: List.generate(total, (index) {
         return Container(
-          width: 14,
-          height: 14,
-          margin: const EdgeInsets.symmetric(horizontal: 6),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          width: 12,
+          height: 12,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: active ? accent : Colors.white.withOpacity(.10),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: accent.withOpacity(.45),
-                      blurRadius: 10,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : null,
+            color: index < current
+                ? Colors.white
+                : Colors.white.withOpacity(0.3),
           ),
         );
       }),
@@ -345,6 +228,7 @@ class _GlassButton extends StatelessWidget {
   final VoidCallback onTap;
   final IconData icon;
   final String label;
+
   const _GlassButton({
     required this.onTap,
     required this.icon,
@@ -353,28 +237,45 @@ class _GlassButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Material(
-          color: Colors.white.withOpacity(.06),
-          child: InkWell(
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: Row(
-                children: [
-                  Icon(icon, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
+    final w = MediaQuery.of(context).size.width;
+    // Küçük ekranda pedleri küçült
+    final horizontal = w < 360 ? 10.0 : 14.0;
+    final vertical = w < 360 ? 8.0 : 10.0;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 40),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Material(
+            color: Colors.white.withOpacity(.06),
+            child: InkWell(
+              onTap: onTap,
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: horizontal,
+                  vertical: vertical,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
+                    // Uzun metinlerde de sığsın
+                    Flexible(
+                      child: Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -384,10 +285,56 @@ class _GlassButton extends StatelessWidget {
   }
 }
 
+class _ActionsWrap extends StatelessWidget {
+  final VoidCallback onEmergency;
+  final VoidCallback onOpenSafetyPlan;
+  final VoidCallback onOpenHopeBox;
+
+  const _ActionsWrap({
+    required this.onEmergency,
+    required this.onOpenSafetyPlan,
+    required this.onOpenHopeBox,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        _GlassButton(
+          onTap: onEmergency,
+          icon: Icons.phone_in_talk,
+          label: 'Acil Yardım',
+        ),
+        _GlassButton(
+          onTap: onOpenSafetyPlan,
+          icon: Icons.security,
+          label: 'Güvenlik Planı',
+        ),
+        _GlassButton(
+          onTap: onOpenHopeBox,
+          icon: Icons.favorite,
+          label: 'Umut Kutusu',
+        ),
+      ],
+    );
+  }
+}
+
 class _CompletionCard extends StatelessWidget {
   final VoidCallback onRestart;
+  final VoidCallback onOpenSafetyPlan;
+  final VoidCallback onOpenHopeBox;
   final Color accent;
-  const _CompletionCard({required this.onRestart, required this.accent});
+
+  const _CompletionCard({
+    required this.onRestart,
+    required this.onOpenSafetyPlan,
+    required this.onOpenHopeBox,
+    required this.accent,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -422,10 +369,29 @@ class _CompletionCard extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              _GlassButton(
-                onTap: onRestart,
-                icon: Icons.replay,
-                label: 'Tekrar Başlat',
+
+              // Tamamlama ekranında da Wrap kullan
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _GlassButton(
+                    onTap: onRestart,
+                    icon: Icons.replay,
+                    label: 'Tekrar Başlat',
+                  ),
+                  _GlassButton(
+                    onTap: onOpenSafetyPlan,
+                    icon: Icons.security,
+                    label: 'Güvenlik Planı',
+                  ),
+                  _GlassButton(
+                    onTap: onOpenHopeBox,
+                    icon: Icons.favorite,
+                    label: 'Umut Kutusu',
+                  ),
+                ],
               ),
             ],
           ),

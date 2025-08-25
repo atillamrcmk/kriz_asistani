@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_7/core/utils/emergency_sheet.dart';
 import 'package:flutter_application_7/widgets/home_action.dart';
+import 'package:go_router/go_router.dart';
 import 'panic_controller.dart';
 import 'panic_view.dart';
 
 class QuickAidPage extends StatefulWidget {
   const QuickAidPage({super.key});
+
   @override
   State<QuickAidPage> createState() => _QuickAidPageState();
 }
@@ -39,6 +41,8 @@ class _QuickAidPageState extends State<QuickAidPage> {
           c: c,
           onRestart: c.restart,
           onEmergency: () => showEmergencySheet(context),
+          onOpenSafetyPlan: () => context.push('/safety-plan'),
+          onOpenHopeBox: () => context.push('/hope-box'), // Yeni
         ),
       ),
     );

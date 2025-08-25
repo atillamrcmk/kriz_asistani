@@ -42,6 +42,7 @@ class _TriagePageState extends State<TriagePage> {
           onClear: c.clear,
           onOpenBreathing: () => context.push('/panic'),
           onOpenJournal: () => context.push('/journal'),
+          onOpenSafetyPlan: () => context.push('/safety-plan'), // Yeni rota
         ),
       ),
     );
