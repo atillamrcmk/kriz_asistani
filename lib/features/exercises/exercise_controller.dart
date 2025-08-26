@@ -1,81 +1,89 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'exercise_log.dart';
 
-class ExerciseItem {
-  final String id; // 'breath-446', 'grounding-54321', 'pmr'
+class Exercise {
+  final String id;
   final String title;
+  final String subtitle;
   final IconData icon;
-  final String? route; // null ise yakında/disabled
-  final Color color;
-  const ExerciseItem({
+  final String route;
+
+  const Exercise({
     required this.id,
     required this.title,
+    required this.subtitle,
     required this.icon,
     required this.route,
-    required this.color,
   });
 }
 
 class ExercisesController extends ChangeNotifier {
-  // hedefi ayarlardan okuyup yazmak için key
-  static const _goalKey = 'daily_exercise_goal';
+  ExercisesController() {
+    _init();
+  }
 
-  // Günlük hedef (varsayılan 4)
-  int dailyGoal = 4;
+  static const _dailyGoalKey = 'daily_goal';
 
-  // Bugün tamamlanan egzersiz sayısı
-  int doneToday = 0;
+  // ---- State ----
+  int _dailyGoal = 3;
+  int get dailyGoal => _dailyGoal;
 
-  // Filtre (kategori) — şimdilik sadece “tümü”
-  String filter = 'tümü';
+  int _doneToday = 0;
+  int get doneToday => _doneToday;
 
-  // Egzersiz kataloğu
-  final items = const <ExerciseItem>[
-    ExerciseItem(
-      id: 'breath-446',
+  double get progress =>
+      _dailyGoal == 0 ? 0 : (_doneToday.clamp(0, _dailyGoal) / _dailyGoal);
+
+  String filter = 'Tümü';
+
+  final List<Exercise> exercises = const [
+    Exercise(
+      id: 'breath_446',
       title: '4-4-6 Nefes',
+      subtitle: '4 sn al • 4 sn tut • 6 sn ver',
       icon: Icons.self_improvement,
       route: '/panic',
-      color: Color(0xFF64FFDA),
     ),
-    ExerciseItem(
-      id: 'grounding-54321',
+    Exercise(
+      id: 'grounding_54321',
       title: '5-4-3-2-1 Grounding',
+      subtitle: 'Duyularla “şimdi ve burada”',
       icon: Icons.center_focus_strong,
-      route: '/exercises/grounding', // (ileride eklenecek)
-      color: Color(0xFF7EA7FF),
+      route: '/exercises/grounding',
     ),
-    ExerciseItem(
+    Exercise(
       id: 'pmr',
       title: 'Kas Gevşetme (PMR)',
+      subtitle: 'Kas-sık bırak döngüsü',
       icon: Icons.accessibility_new,
-      route: '/exercises/pmr', // (ileride)
-      color: Color(0xFFFFA6C9),
+      route: '/exercises/pmr',
     ),
   ];
 
-  Future<void> load() async {
+  // ---- Init ----
+  Future<void> _init() async {
+    await Future.wait([_loadDailyGoal(), refreshToday()]);
+  }
+
+  // ---- Goal persistence ----
+  Future<void> _loadDailyGoal() async {
     final sp = await SharedPreferences.getInstance();
-    dailyGoal = sp.getInt(_goalKey) ?? 4;
-    doneToday = await ExerciseLog.countToday();
+    _dailyGoal = sp.getInt(_dailyGoalKey) ?? 3;
     notifyListeners();
   }
 
-  Future<void> setDailyGoal(int v) async {
+  Future<void> setDailyGoal(int value) async {
+    final v = value.clamp(1, 12); // 1–12 arası mantıklı sınır
+    _dailyGoal = v;
     final sp = await SharedPreferences.getInstance();
-    dailyGoal = v.clamp(1, 12);
-    await sp.setInt(_goalKey, dailyGoal);
+    await sp.setInt(_dailyGoalKey, v);
     notifyListeners();
   }
 
-  double get progress =>
-      dailyGoal == 0 ? 0 : (doneToday / dailyGoal).clamp(0, 1);
-
-  // egzersiz tamamlandığında paneli tazelemek için dışarıdan çağrılabilir
+  // ---- Today progress ----
   Future<void> refreshToday() async {
-    doneToday = await ExerciseLog.countToday();
+    _doneToday = await ExerciseLog.countToday();
     notifyListeners();
   }
 }

@@ -1,87 +1,62 @@
-import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// SharedPreferences key
-const _exerciseLogKey = 'exercise_log_v1';
-
+/// Basit günlük egzersiz günlüğü:
+/// - add(id): bugüne 1 tamamlanma ekler
+/// - isCompletedToday(id): aynı egzersizi bugün en az bir kez yaptı mı
+/// - countToday(): bugün toplam kaç egzersiz tamamlandı
+/// - clearToday(): bugünkü kayıtları temizle (opsiyonel)
 class ExerciseLog {
-  /// Tekil bir log kaydı
-  final String type; // 'breath', 'grounding', 'pmr' vb.
-  final DateTime createdAt;
+  static const _keyPrefix = 'exercise_log_'; // YYYYMMDD
+  static const _setSuffix =
+      '_set'; // tamamlanan id seti (tekrarları engellemek istersen kullan)
 
-  ExerciseLog({required this.type, required this.createdAt});
-
-  Map<String, dynamic> toMap() => {
-    'type': type,
-    'createdAt': createdAt.toIso8601String(),
-  };
-
-  factory ExerciseLog.fromMap(Map<String, dynamic> map) => ExerciseLog(
-    type: map['type'] as String? ?? 'generic',
-    createdAt:
-        DateTime.tryParse(map['createdAt'] as String? ?? '') ?? DateTime.now(),
-  );
-
-  // ----------------- STATİK METHODLAR -----------------
-
-  /// Egzersiz tamamlandığında kayıt oluşturur.
-  static Future<void> record({required String type}) async {
-    final sp = await SharedPreferences.getInstance();
-    final list = sp.getStringList(_exerciseLogKey) ?? <String>[];
-
-    final newEntry = ExerciseLog(type: type, createdAt: DateTime.now());
-
-    list.add(jsonEncode(newEntry.toMap()));
-    await sp.setStringList(_exerciseLogKey, list);
-  }
-
-  /// Tüm kayıtları getirir (yeniden yükler).
-  static Future<List<ExerciseLog>> loadAll() async {
-    final sp = await SharedPreferences.getInstance();
-    final list = sp.getStringList(_exerciseLogKey) ?? <String>[];
-
-    return list.map((s) {
-      try {
-        final map = jsonDecode(s) as Map<String, dynamic>;
-        return ExerciseLog.fromMap(map);
-      } catch (_) {
-        return ExerciseLog(type: 'unknown', createdAt: DateTime.now());
-      }
-    }).toList();
-  }
-
-  /// Bugün tamamlanan egzersiz sayısı.
-  static Future<int> countToday() async {
+  static Future<String> _todayKey() async {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final logs = await loadAll();
-
-    return logs
-        .where(
-          (e) =>
-              e.createdAt.year == today.year &&
-              e.createdAt.month == today.month &&
-              e.createdAt.day == today.day,
-        )
-        .length;
+    final d = DateTime(now.year, now.month, now.day);
+    final ymd =
+        '${d.year.toString().padLeft(4, '0')}'
+        '${d.month.toString().padLeft(2, '0')}'
+        '${d.day.toString().padLeft(2, '0')}';
+    return '$_keyPrefix$ymd';
+    // Tamamlanma sayısı: <key>: int
+    // Tamamlanan id seti: <key>_set: StringList
   }
 
-  /// Belirli bir türden kaç kez yapılmış (tümü).
-  static Future<int> countByType(String type) async {
-    final logs = await loadAll();
-    return logs.where((e) => e.type == type).length;
-  }
-
-  /// Son yapılan X kaydı getirir.
-  static Future<List<ExerciseLog>> last(int n) async {
-    final logs = await loadAll();
-    logs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return logs.take(n).toList();
-  }
-
-  /// Tüm kayıtları temizler.
-  static Future<void> clear() async {
+  static Future<void> add(String id) async {
     final sp = await SharedPreferences.getInstance();
-    await sp.remove(_exerciseLogKey);
+    final key = await _todayKey();
+    final setKey = '${key}$_setSuffix';
+
+    // Tekrarları saymak istemiyorsan aşağıyı aktif bırak (bugün 1 egzersiz türünü 1 kez saysın)
+    final currentSet = sp.getStringList(setKey) ?? <String>[];
+    if (!currentSet.contains(id)) {
+      currentSet.add(id);
+      await sp.setStringList(setKey, currentSet);
+      final c = sp.getInt(key) ?? 0;
+      await sp.setInt(key, c + 1);
+    }
+    // Eğer tekrarları da saymak istersen yukarıdaki set mantığını kaldırıp sadece sayacı arttır.
+  }
+
+  static Future<int> countToday() async {
+    final sp = await SharedPreferences.getInstance();
+    final key = await _todayKey();
+    return sp.getInt(key) ?? 0;
+  }
+
+  static Future<bool> isCompletedToday(String id) async {
+    final sp = await SharedPreferences.getInstance();
+    final key = await _todayKey();
+    final setKey = '${key}$_setSuffix';
+    final currentSet = sp.getStringList(setKey) ?? <String>[];
+    return currentSet.contains(id);
+  }
+
+  static Future<void> clearToday() async {
+    final sp = await SharedPreferences.getInstance();
+    final key = await _todayKey();
+    final setKey = '${key}$_setSuffix';
+    await sp.remove(key);
+    await sp.remove(setKey);
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_7/features/exercises/exercise_log.dart';
 import 'panic_controller.dart';
 
 class PanicView extends StatelessWidget {
@@ -369,6 +370,21 @@ class _CompletionCard extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
+
+              // ✅ TASARIMI BOZMADAN: Üste birincil "Tamamla" butonu
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () async {
+                    await ExerciseLog.add('breath_446'); // günlük log
+                    if (context.mounted)
+                      Navigator.pop(context, true); // -> true
+                  },
+                  child: const Text('Egzersizi Tamamla'),
+                ),
+              ),
+
+              const SizedBox(height: 12),
 
               // Tamamlama ekranında da Wrap kullan
               Wrap(

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_7/features/chat/chat_page.dart';
+import 'package:flutter_application_7/features/exercises/grounding_page.dart';
+import 'package:flutter_application_7/features/exercises/pmr_page.dart';
 import 'package:flutter_application_7/features/safety/safety_plan_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_application_7/features/home/home_page.dart';
@@ -20,6 +23,7 @@ final appRouter = GoRouter(
       builder: (context, state) => const ExercisesPage(),
     ),
     GoRoute(path: '/journal', builder: (context, state) => const JournalPage()),
+    GoRoute(path: '/chat', builder: (context, state) => const ChatPage()),
     GoRoute(path: '/triage', builder: (context, state) => const TriagePage()),
     GoRoute(path: '/stats', builder: (context, state) => const StatsPage()),
     GoRoute(
@@ -38,5 +42,10 @@ final appRouter = GoRouter(
       path: '/onboarding',
       builder: (context, state) => const OnboardingPage(),
     ),
+    GoRoute(
+      path: '/exercises/grounding',
+      builder: (ctx, st) => const GroundingPage(),
+    ),
+    GoRoute(path: '/exercises/pmr', builder: (ctx, st) => const PmrPage()),
   ],
 );
